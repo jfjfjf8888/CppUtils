@@ -8,10 +8,10 @@ CommandItem::CommandItem()
 
 CommandItem::CommandItem(CommandItem & executor)
 {
-    mCommand = executor.getCommand();
-    mOnSuccessCallback = executor.getOnSuccessCallback();
-    mOnErrorCallback = executor.getOnErrorCallback();
-    mBeforeExecuteCallback = executor.getBeforeExecuteCallback();
+	mCommand = executor.getCommand();
+	mOnSuccessCallback = executor.getOnSuccessCallback();
+	mOnErrorCallback = executor.getOnErrorCallback();
+	mOnBeforeCallback = executor.getBeforeExecuteCallback();
 }
 
 CommandItem::~CommandItem()
@@ -20,169 +20,147 @@ CommandItem::~CommandItem()
 
 CommandItem & CommandItem::command(const QString cmd)
 {
-    mCommand = cmd;
-    return *this;
+	mCommand = cmd;
+	return *this;
 }
 
-CommandItem & CommandItem::onBefore(BeforeExecuteCallback cb)
+CommandItem & CommandItem::onBefore(LifeCycleCallback cb)
 {
-    mBeforeExecuteCallback = cb;
-    return *this;
+	mOnBeforeCallback = cb;
+	return *this;
+}
+
+CommandItem & CommandItem::onAfter(LifeCycleCallback cb)
+{
+	mOnAfterCallback = cb;
+	return *this;
 }
 
 CommandItem & CommandItem::onSuccess(Callback cb)
 {
-    mOnSuccessCallback = cb;
-    return *this;
+	mOnSuccessCallback = cb;
+	return *this;
 }
 
 CommandItem & CommandItem::onError(Callback cb)
 {
-    mOnErrorCallback = cb;
-    return *this;
+	mOnErrorCallback = cb;
+	return *this;
 }
 
 QString & CommandItem::getCommand()
 {
-    return mCommand;
+	return mCommand;
 }
 
 const Callback & CommandItem::getOnSuccessCallback() const
 {
-    return mOnSuccessCallback;
+	return mOnSuccessCallback;
 }
 
 const Callback & CommandItem::getOnErrorCallback() const
 {
-    return mOnErrorCallback;
+	return mOnErrorCallback;
 }
 
-const BeforeExecuteCallback &CommandItem::getBeforeExecuteCallback() const
+const LifeCycleCallback &CommandItem::getBeforeExecuteCallback() const
 {
-    return mBeforeExecuteCallback;
+	return mOnBeforeCallback;
 }
 
-
-ShellExcuteChain::ShellExcuteChain(int maxThreadCount, bool autoDelete)
+const LifeCycleCallback &CommandItem::getAfterExecuteCallback() const
 {
-    mExecutors.clear();
-    mThreadPool.setMaxThreadCount(maxThreadCount);
-    mAutoDetele = autoDelete;
-    mCancelWork = false;
+	return mOnAfterCallback;
 }
+
+
+ShellExcuteChain::ShellExcuteChain(int maxThreadCount)
+{
+	mCommandItems.clear();
+	mThreadPool.setMaxThreadCount(maxThreadCount);
+}
+
 
 ShellExcuteChain::~ShellExcuteChain()
 {
-    foreach (CommandItem * excutor, mExecutors) {
-	delete excutor;
-    }
-    mExecutors.clear();
+	stop();
+	foreach(CommandItem * excutor, mCommandItems) {
+		delete excutor;
+	}
+	mCommandItems.clear();
 }
 
-ShellExcuteChain * ShellExcuteChain::getInstance(int maxThreadCount, bool autoDelete)
+ShellExcuteChain * ShellExcuteChain::getInstance(int maxThreadCount)
 {
-    return new ShellExcuteChain(maxThreadCount, autoDelete);
+	return new ShellExcuteChain(maxThreadCount);
 }
 
 ShellExcuteChain * ShellExcuteChain::appendCommandItem(CommandItem& executor)
 {
-    CommandItem * myExecutor = new CommandItem(executor);
-    mExecutors.push_back(myExecutor);
-    return this;
+	CommandItem * myExecutor = new CommandItem(executor);
+	mCommandItems.push_back(myExecutor);
+	return this;
 }
 
-QList<CommandItem*>& ShellExcuteChain::getExcutors()
+QList<CommandItem*>& ShellExcuteChain::getCommandItems()
 {
-    return mExecutors;
+	return mCommandItems;
 }
 
 void ShellExcuteChain::start()
 {
-    if (!checkCommandItemsCallbacks()) {
-	qDebug() << "Error: Some CommandItem OnSuccessCallback or OnErrorCallback, work not start, pls check!";
-	return;
-    }
-
-    if (!mAutoDetele && !mOnAllCompletedCallback) {
-	qDebug() << "Wranning: OnAllCompletedCallback not set, you can call ShellExcuteChain->onAllCompleted to set it, your callback will be call when all job completed.";
-    }
-    mCancelWork = false;
-    mLastResult.clear();
-    mLastError.clear();
-
-    ShellExcuteRunnable * runnable = new ShellExcuteRunnable(mExecutors[0], 0);
-    runnable->OnJobCompleted([&, runnable](int idx, bool continuable, const QString lastResult, const QString lastError) {
-	mCancelWork = !continuable;
-	mLastResult = lastResult;
-	mLastError = lastError;
-	if (mCancelWork) {
-     	    if (mOnAllCompletedCallback) {
-		mOnAllCompletedCallback();
-	    }
-	    if (mAutoDetele) delete this;
+	if (!checkCommandItemsCallbacks()) {
+		qDebug() << "Error: Some CommandItem OnSuccessCallback or OnErrorCallback, work not start, pls check!";
 		return;
-            }
-
-	CommandItem * next = nextShellItem(idx);
-	if (next) {
-            ShellExcuteRunnable * newRunnable = new ShellExcuteRunnable(next, idx + 1);
-            newRunnable->OnJobCompleted(runnable->getCallback());
-            mThreadPool.start(newRunnable);
-        }
-	else {
-	    if (mOnAllCompletedCallback) {
-		mOnAllCompletedCallback();
-	    }	
-	    if (mAutoDetele) delete this;
 	}
-    });
 
-    mThreadPool.start(runnable);
+	if (!mOnAllCompletedCallback) {
+		qDebug() << "Wranning: OnAllCompletedCallback not set, you can call ShellExcuteChain->onAllCompleted to set it, your callback will be call when all job completed.";
+	}
+	mCancelWork = false;
+	mLastResult.clear();
+	mLastError.clear();
+
+	mThreadPool.start(new ShellExcuteRunnable(this));
 }
 
 void ShellExcuteChain::stop()
 {
-    mCancelWork = true;
+	mCancelWork = true;
 }
 
 QString & ShellExcuteChain::getLastResult()
 {
-    return mLastResult;
+	return mLastResult;
 }
 
 QString & ShellExcuteChain::getLastError()
 {
-    return mLastError;
+	return mLastError;
 }
 
 ShellExcuteChain * ShellExcuteChain::onAllCompleted(OnAllCompletedCallback cb)
 {
-    mOnAllCompletedCallback = cb;
-    return this;
-}
-
-CommandItem * ShellExcuteChain::nextShellItem(int oldIndex)
-{
-    if (oldIndex < mExecutors.count() - 1) {
-	return mExecutors[oldIndex + 1];
-    }
-
-    return nullptr;
+	mOnAllCompletedCallback = cb;
+	return this;
 }
 
 bool ShellExcuteChain::checkCommandItemsCallbacks()
 {
-    foreach (CommandItem * excutor, mExecutors) {
-	if (excutor->getOnErrorCallback() && excutor->getOnSuccessCallback()) continue;
+	foreach(CommandItem * excutor, mCommandItems) {
+		if (excutor->getOnErrorCallback() && excutor->getOnSuccessCallback()) continue;
+		return false;
+	}
 
-	return false;
-    }
-
-    return true;
+	return true;
 }
 
-ShellExcuteChain * ShellExcuteChain::setAutoDetele(bool newAutoDetele)
+const OnAllCompletedCallback & ShellExcuteChain::getOnAllCompletedCallback() const
 {
-    mAutoDetele = newAutoDetele;
-    return this;
+	return mOnAllCompletedCallback;
+}
+
+bool ShellExcuteChain::cancelWork()
+{
+	return mCancelWork;
 }
