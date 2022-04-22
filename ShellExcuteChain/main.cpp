@@ -4,12 +4,12 @@
 
 int main(int argc, char *argv[])
 {
-	// 从Android手机导出 微信的 apk包 测试
+    // 从Android手机导出 微信的 apk包 测试
     ShellExcuteChain * chain = ShellExcuteChain::getInstance();
 	
-	static QString device = "XXXXX";
-	static QString packageName = "com.tencent.mm";
-	static QString exportSavePath = "D:/Export";
+    static QString device = "XXXXX";
+    static QString packageName = "com.tencent.mm";
+    static QString exportSavePath = "D:/Export";
 
     chain->appendCommandItem(
                 CommandItem()
