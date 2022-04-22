@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
             )
         ->appendCommandItem(
                 CommandItem()
-                .command(QString("adb -s %1 pull [PATH] %3/%4.apk").arg(device).arg(exportSavePath).arg(packageName))
+                .command(QString("adb -s %1 pull [PATH] %2/%3.apk").arg(device).arg(exportSavePath).arg(packageName))
                 .onBefore([chain](CommandItem * thisItem) {
                     // 在开始执行以前，把上一步的执行结果应用到当前Item
                      thisItem->getCommand().replace("[PATH]", chain->getLastResult());
