@@ -4,8 +4,7 @@
 
 ## XQt 对QProcess、QRunnable进行了扩展，使其支持lambda表达式，让程序逻辑更加清晰(支持嵌套)
 
-    ```cpp
-
+    ```
     // include header files
     #include "XRunnable.h"
     #include "XProcess.h"
